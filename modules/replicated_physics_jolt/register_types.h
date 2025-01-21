@@ -1,0 +1,4 @@
+#include "modules/register_module_types.h"
+
+void initialize_replicated_physics_jolt_module(ModuleInitializationLevel p_level);
+void uninitialize_replicated_physics_jolt_module(ModuleInitializationLevel p_level);
