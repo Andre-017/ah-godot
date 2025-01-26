@@ -3,6 +3,9 @@
 
 #include "replicated_rigid_body_3d.h"
 
+// Default id of the server in Godot multiplayer
+const int SERVER_ID = 1;
+
 struct PlayerInput {
     PlayerInput() {
         reset();
@@ -14,6 +17,13 @@ struct PlayerInput {
     void reset() {
         forward = 0.0f;
         left = 0.0f;
+    }
+
+    bool is_empty() const {
+        if (!Math::is_zero_approx(forward)) { return false; }
+        if (!Math::is_zero_approx(left)) { return false; }
+
+        return true;
     }
 
     Dictionary _serialize() const {
@@ -47,7 +57,7 @@ struct PlayerInput {
 };
 
 struct PlayerState {
-    // ToDo: Implement player state
+    // ToDo: Implement player state. Should this go in the ReplicatedRighidBody3D class?
 };
 
 class ReplicatedPhysicsPlayer3D : public ReplicatedRigidBody3D {
@@ -56,15 +66,32 @@ class ReplicatedPhysicsPlayer3D : public ReplicatedRigidBody3D {
 protected:
     PlayerInput pending_input;
 
-    void _physics_process();
+    void _ready() override;
+    void _physics_process() override;
     void _consume_pending_input();
+    void _apply_input(const PlayerInput &input);
+
+    bool locally_controlled = false;
 
 public:
+    // Set locally_controlled from GDScript _ready() method. Doing it here in C++ doesn't guarantee it's set before _ready() is called in GDScript
+    bool is_locally_controlled() const { return locally_controlled; };
+    void set_locally_controlled(bool value) { locally_controlled = value; };
+
+public:
+    // ----- Input methods -----
     void add_forward_input(float axis_value);
     void add_left_input(float axis_value);
+
+    // ----- End input methods -----
+
+protected:
+    // ----- RPC methods -----
+    void _send_input(const Dictionary &input);
+
+    // ----- End RPC methods -----
     
 protected:
-    void _notification(int p_what);
     static void _bind_methods();
 
 public:
