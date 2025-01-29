@@ -4,6 +4,12 @@
         "*.ush": "hlsl",
         "*.inc": "cpp",
         "ios": "cpp",
-        "xiosbase": "cpp"
+        "xiosbase": "cpp",
+        "iosfwd": "cpp",
+        "xlocbuf": "cpp",
+        "vector": "cpp",
+        "xhash": "cpp",
+        "xstring": "cpp",
+        "filesystem": "cpp"
     }
 }
