@@ -14,8 +14,8 @@ void ReplicatedPhysicsPlayer3D::_physics_process() {
 
 	if (locally_controlled) {
 		_handle_inputs(); // This will be called by GDScript, which will add to pending_input
+		_consume_pending_input();
 	}
-		
 
 	PhysicsState current_state;
 	current_state.physics_frame = physics_frame;
@@ -23,18 +23,20 @@ void ReplicatedPhysicsPlayer3D::_physics_process() {
 
 	if (multiplayer->is_server() && !locally_controlled) {
 		state_buffer[state_buffer.get_next_index(physics_frame)] = current_state;
-		// state_buffer.push(current_state, physics_frame);
-		rpc_id(player_id, "_send_state_rpc", current_state._serialize());
+		print_line("Server | Physics tick: ", physics_tick);
+		// print_line("Frame: ", physics_frame, " | Server state: ", state_buffer[state_buffer.get_next_index(physics_frame)]._serialize());
+		// rpc_id(player_id, "_send_state_rpc", current_state._serialize());
 	}
 
 	if (!multiplayer->is_server() && locally_controlled) {
 		state_buffer[state_buffer.get_next_index(physics_frame)] = current_state;
-		// state_buffer.push(current_state, physics_frame);
+		print_line("Client | Physics tick: ", physics_tick);
+		// print_line("Frame: ", physics_frame, " | Client state: ", state_buffer[state_buffer.get_next_index(physics_frame)]._serialize());
 	}
 
-	if (locally_controlled ) {
-		_consume_pending_input();
-	}	
+	// if (locally_controlled ) {
+	// 	_consume_pending_input();
+	// }
 }
 
 void ReplicatedPhysicsPlayer3D::_consume_pending_input() {
@@ -118,12 +120,12 @@ void ReplicatedPhysicsPlayer3D::_send_state(const Dictionary &state) {
 	PhysicsState server_state;
 	server_state._deserialize(state);
 
-	print_line("Server state: ", server_state._serialize());
+	// print_line("Server state: ", server_state._serialize());
 
 	// PhysicsState client_state = state_buffer.get(server_state.physics_frame);
 	PhysicsState client_state = state_buffer[state_buffer.get_next_index(server_state.physics_frame)];
 
-	print_line("Client state: ", client_state._serialize());
+	// print_line("Client state: ", client_state._serialize());
 
 	bool sync = !client_state.is_approx_equal(server_state);
 	// print_line("Sync: ", sync);
@@ -149,6 +151,10 @@ void ReplicatedPhysicsPlayer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_send_input", "input"), &ReplicatedPhysicsPlayer3D::_send_input);
 	ClassDB::bind_method(D_METHOD("_send_state", "state"), &ReplicatedPhysicsPlayer3D::_send_state);
 	// ----- End RPC methods -----
+
+	// ----- Getters/Setters -----
+	ClassDB::bind_method(D_METHOD("set_physics_tick", "value"), &ReplicatedPhysicsPlayer3D::set_physics_tick);
+	// ----- End Getters/Setters -----
 }
 
 // ReplicatedPhysicsPlayer3D::ReplicatedPhysicsPlayer3D(): 

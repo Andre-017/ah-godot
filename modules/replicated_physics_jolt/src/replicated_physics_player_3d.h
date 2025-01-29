@@ -90,7 +90,10 @@ class ReplicatedPhysicsPlayer3D : public ReplicatedRigidBody3D {
     GDCLASS(ReplicatedPhysicsPlayer3D, ReplicatedRigidBody3D);
 
 protected:
+    uint64_t physics_tick = 0; // Replicated physics_tick. This needs to be set from the PhysicsNetworkManager on _ready
+
     int player_id; // Unique id for this player
+
     PlayerInput pending_input;
     // CircularBuffer<PlayerInput> input_history;
     CircularBuffer<PhysicsState> state_buffer = CircularBuffer<PhysicsState>(PHYSICS_STATE_BUFFER_SIZE);
@@ -127,6 +130,11 @@ protected:
     void _send_state(const Dictionary &state);
 
     // ----- End RPC methods -----
+
+public:
+    // ----- Getters/Setters -----
+    void set_physics_tick(uint64_t value) { physics_tick = value; }
+    // ----- End Getters/Setters -----
     
 protected:
     static void _bind_methods();

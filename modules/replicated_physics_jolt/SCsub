@@ -3,7 +3,8 @@ Import('env')
 sources = [
     "register_types.cpp",
     "src/replicated_physics_player_3d.cpp",
-    "src/replicated_rigid_body_3d.cpp"
+    "src/replicated_rigid_body_3d.cpp",
+    "src/physics_network_manager.cpp"
 ]
 
 env.add_source_files(env.modules_sources, sources)
