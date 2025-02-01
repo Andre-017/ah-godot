@@ -10,6 +10,8 @@ const int SERVER_ID = 1;
 // Number of physics frames to hold in buffer
 const int PHYSICS_STATE_BUFFER_SIZE = 200;
 
+class PhysicsNetworkManager;
+
 struct PlayerInput {
     PlayerInput() {
         reset();
@@ -90,7 +92,7 @@ class ReplicatedPhysicsPlayer3D : public ReplicatedRigidBody3D {
     GDCLASS(ReplicatedPhysicsPlayer3D, ReplicatedRigidBody3D);
 
 protected:
-    uint64_t physics_tick = 0; // Replicated physics_tick. This needs to be set from the PhysicsNetworkManager on _ready
+    PhysicsNetworkManager *physics_manager = nullptr;
 
     int player_id; // Unique id for this player
 
@@ -133,7 +135,7 @@ protected:
 
 public:
     // ----- Getters/Setters -----
-    void set_physics_tick(uint64_t value) { physics_tick = value; }
+    void set_physics_manager(PhysicsNetworkManager* manager) { physics_manager = manager; }
     // ----- End Getters/Setters -----
     
 protected:

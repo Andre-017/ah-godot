@@ -13,17 +13,21 @@ public:
     uint64_t get_physics_tick() const { return physics_tick; }
     void set_physics_tick(uint64_t tick) { physics_tick = tick; }
 
+    // static PhysicsNetworkManager* get_singleton() { return singleton; }
+
+    void increment_physics_tick() { physics_tick++; }
+
 protected:
-    virtual void _ready() {};
-    virtual void _physics_process();
-    
+    virtual void _physics_process();   
     void _notification(int p_what);
 
     static void _bind_methods();
 
+    // static PhysicsNetworkManager* singleton;
+
 public:
     PhysicsNetworkManager();
-    ~PhysicsNetworkManager() {}
+    ~PhysicsNetworkManager();
 };
 
 

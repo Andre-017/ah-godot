@@ -11,10 +11,6 @@ void PhysicsNetworkManager::_notification(int p_what)
 
     switch(p_what)
     {
-        case NOTIFICATION_READY: {
-            _ready();
-            break;
-        }
         case NOTIFICATION_PHYSICS_PROCESS: {
             _physics_process();
             break;
@@ -35,3 +31,5 @@ void PhysicsNetworkManager::_bind_methods() {
 PhysicsNetworkManager::PhysicsNetworkManager() {
     set_physics_process(true);
 }
+
+PhysicsNetworkManager::~PhysicsNetworkManager() {}

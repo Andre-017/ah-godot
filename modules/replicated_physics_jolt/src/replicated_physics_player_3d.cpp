@@ -1,6 +1,8 @@
 #include "replicated_physics_player_3d.h"
 #include "scene/main/multiplayer_api.h"
 
+#include "physics_network_manager.h"
+
 void ReplicatedPhysicsPlayer3D::_ready() {
 	ReplicatedRigidBody3D::_ready();
 
@@ -9,6 +11,7 @@ void ReplicatedPhysicsPlayer3D::_ready() {
 
 void ReplicatedPhysicsPlayer3D::_physics_process() {
 	DEV_ASSERT(multiplayer);
+	DEV_ASSERT(physics_manager);
 
 	uint64_t physics_frame = Engine::get_singleton()->get_physics_frames();
 
@@ -20,6 +23,8 @@ void ReplicatedPhysicsPlayer3D::_physics_process() {
 	PhysicsState current_state;
 	current_state.physics_frame = physics_frame;
 	_fill_physics_state(current_state);
+
+	const uint64_t physics_tick = physics_manager->get_physics_tick();
 
 	if (multiplayer->is_server() && !locally_controlled) {
 		state_buffer[state_buffer.get_next_index(physics_frame)] = current_state;
@@ -153,7 +158,7 @@ void ReplicatedPhysicsPlayer3D::_bind_methods() {
 	// ----- End RPC methods -----
 
 	// ----- Getters/Setters -----
-	ClassDB::bind_method(D_METHOD("set_physics_tick", "value"), &ReplicatedPhysicsPlayer3D::set_physics_tick);
+	ClassDB::bind_method(D_METHOD("set_physics_manager", "manager"), &ReplicatedPhysicsPlayer3D::set_physics_manager);
 	// ----- End Getters/Setters -----
 }
 
