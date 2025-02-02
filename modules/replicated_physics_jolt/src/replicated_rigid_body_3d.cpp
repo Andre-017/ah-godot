@@ -3,6 +3,9 @@
 
 void ReplicatedRigidBody3D::_ready() {
     multiplayer = get_multiplayer().ptr();
+    
+    // This must be set to true in order to receive the physics_process notification
+    set_physics_process(true);
 }
 
 void ReplicatedRigidBody3D::_notification(int p_what)
@@ -31,6 +34,4 @@ void ReplicatedRigidBody3D::_bind_methods() {
 }
 
 ReplicatedRigidBody3D::ReplicatedRigidBody3D() {
-    // This must be set to true in order to receive the physics_process notification
-    set_physics_process(true);
 }

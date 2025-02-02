@@ -1,6 +1,9 @@
 #include "physics_network_manager.h"
+#include "scene/main/multiplayer_api.h"
 
 void PhysicsNetworkManager::_physics_process() {
+    bool server = get_multiplayer().ptr()->is_server();
+
     physics_tick++;
 }
 

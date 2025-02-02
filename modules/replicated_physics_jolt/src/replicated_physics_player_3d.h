@@ -94,11 +94,16 @@ class ReplicatedPhysicsPlayer3D : public ReplicatedRigidBody3D {
 protected:
     PhysicsNetworkManager *physics_manager = nullptr;
 
+    // uint64_t physics_tick = -1;
+
     int player_id; // Unique id for this player
 
     PlayerInput pending_input;
     // CircularBuffer<PlayerInput> input_history;
     CircularBuffer<PhysicsState> state_buffer = CircularBuffer<PhysicsState>(PHYSICS_STATE_BUFFER_SIZE);
+
+    int first_frame = -1;
+    int tick_offset = 0;
 
     void _ready() override;
     void _physics_process() override;
@@ -128,8 +133,8 @@ public:
 
 protected:
     // ----- RPC methods -----
-    void _send_input(const Dictionary &input);
-    void _send_state(const Dictionary &state);
+    void _client_send_input(const Dictionary &input);
+    void _client_send_state(const Dictionary &in_client_state);
 
     // ----- End RPC methods -----
 
