@@ -8,14 +8,14 @@ struct PhysicsState {
         reset();
     }
 
-    uint64_t physics_frame;
+    // uint64_t physics_frame;
     Vector3 position;
     Quaternion rotation;
     Vector3 linear_velocity;
     Vector3 angular_velocity;
 
     void reset() {
-        physics_frame = 0;
+        // physics_frame = 0;
         position = Vector3();
         rotation = Quaternion();
         linear_velocity = Vector3();
@@ -34,7 +34,7 @@ struct PhysicsState {
     Dictionary _serialize() const {
         Dictionary dict;
 
-        dict["physics_frame"] = physics_frame;
+        // dict["physics_frame"] = physics_frame;
         dict["position"] = position;
         dict["rotation"] = rotation; // ToDo: Quantize this
 
@@ -50,7 +50,7 @@ struct PhysicsState {
     }
 
     void _deserialize(const Dictionary &dict) {
-        physics_frame = dict.get("physics_frame", 0);
+        // physics_frame = dict.get("physics_frame", 0);
         position = dict.get("position", Vector3());
         rotation = dict.get("rotation", Quaternion());
         linear_velocity = dict.get("linear_velocity", Vector3());

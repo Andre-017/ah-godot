@@ -10,30 +10,27 @@ void ReplicatedPhysicsPlayer3D::_ready() {
 }
 
 void ReplicatedPhysicsPlayer3D::_physics_process() {
-	DEV_ASSERT(multiplayer && physics_manager);
-
-	// uint64_t physics_tick = Engine::get_singleton()->get_physics_frames();
-	uint64_t physics_tick = physics_manager->get_physics_tick();
+	DEV_ASSERT(multiplayer);
 
 	if (locally_controlled) {
-		_handle_inputs(); // This will be called by GDScript, which will add to pending_input
+		_handle_inputs();
 		_consume_pending_input();
 	}
 
-	PhysicsState current_state;
-	current_state.physics_frame = physics_tick;
-	_fill_physics_state(current_state);
-	
-	if (multiplayer->is_server() && !locally_controlled) {
-		state_buffer[state_buffer.get_next_index(physics_tick)] = current_state;
-		print_line("Server state: ", current_state._serialize());
+	if (!multiplayer->is_server() && locally_controlled) {
+		PlayerState client_state;
+		_fill_physics_state(client_state.physics_state);
+		client_state.input = pending_input;
+		client_state.sequence = input_sequence;
+
+		state_buffer[state_buffer.get_next_index(input_sequence)] = client_state;
+
+		rpc_id(SERVER_ID, "_client_send_input_rpc", client_state._serialize());
+
+		input_sequence++;
 	}
 
-	if (!multiplayer->is_server() && locally_controlled) {
-		state_buffer[state_buffer.get_next_index(physics_tick)] = current_state;
-		print_line("Client state: ", current_state._serialize());
-		// rpc_id(1, "_client_send_state_rpc", current_state._serialize());
-	}
+	pending_input.reset();
 }
 
 void ReplicatedPhysicsPlayer3D::_consume_pending_input() {
@@ -44,18 +41,18 @@ void ReplicatedPhysicsPlayer3D::_consume_pending_input() {
 	// ToDo: Implement adjustment on client if needed
 
 	if (locally_controlled) {
-		uint64_t physics_frame = Engine::get_singleton()->get_physics_frames();
+		// uint64_t physics_frame = Engine::get_singleton()->get_physics_frames();
 
 		// Apply input regardless if server or client, since this is using client-side prediction
 		_apply_input(pending_input);
 
-		// If this isn't the server, then we need to send the input to the server to perform the same logic
-		if (!multiplayer->is_server()) {
-			rpc_id(SERVER_ID, "_client_send_input_rpc", pending_input._serialize());
-		}
+		// // If this isn't the server, then we need to send the input to the server to perform the same logic
+		// if (!multiplayer->is_server()) {
+		// 	rpc_id(SERVER_ID, "_client_send_input_rpc", pending_input._serialize());
+		// }
 	}
 
-	pending_input.reset();
+	// pending_input.reset();
 }
 
 void ReplicatedPhysicsPlayer3D::_apply_input(const PlayerInput &input) {
@@ -94,15 +91,16 @@ These methods are called from GDScript to perform the logic of the RPC. The rpc'
 This RPC is called from the client to the server to send input. The server will then apply the input to the player
 */
 // @rpc("any_peer", "unreliable_ordered")
-void ReplicatedPhysicsPlayer3D::_client_send_input(const Dictionary &input) {
-	DEV_ASSERT(multiplayer);
+void ReplicatedPhysicsPlayer3D::_client_send_input(const Dictionary &player_state) {
+	DEV_ASSERT(multiplayer && multiplayer->is_server() && !locally_controlled);
 
-	if (!multiplayer->is_server() || locally_controlled) { return; }
+    PlayerState client_state;
+    client_state._deserialize(player_state);
 
-    PlayerInput client_input;
-    client_input._deserialize(input);
-
-    _apply_input(client_input);
+	if (client_state.sequence > last_sequence) {
+		_apply_input(client_state.input);
+		last_sequence = client_state.sequence;
+	}
 }
 
 /*
@@ -159,19 +157,14 @@ void ReplicatedPhysicsPlayer3D::_bind_methods() {
 	The below method bindings are for RPC methods. Since these rpc's need to be defined in GDScript,
 	we'll define them there and then call these methods to perform the logic
 	*/
-	ClassDB::bind_method(D_METHOD("_client_send_input", "input"), &ReplicatedPhysicsPlayer3D::_client_send_input);
+	ClassDB::bind_method(D_METHOD("_client_send_input", "player_state"), &ReplicatedPhysicsPlayer3D::_client_send_input);
 	ClassDB::bind_method(D_METHOD("_client_send_state", "in_client_state"), &ReplicatedPhysicsPlayer3D::_client_send_state);
 	// ----- End RPC methods -----
 
 	// ----- Getters/Setters -----
-	ClassDB::bind_method(D_METHOD("set_physics_manager", "manager"), &ReplicatedPhysicsPlayer3D::set_physics_manager);
+	// ClassDB::bind_method(D_METHOD("set_physics_manager", "manager"), &ReplicatedPhysicsPlayer3D::set_physics_manager);
 	// ----- End Getters/Setters -----
 }
-
-// ReplicatedPhysicsPlayer3D::ReplicatedPhysicsPlayer3D(): 
-// 	state_buffer(PHYSICS_STATE_BUFFER_SIZE),
-// 	input_history(PHYSICS_STATE_BUFFER_SIZE)
-// {}
 
 ReplicatedPhysicsPlayer3D::ReplicatedPhysicsPlayer3D()
 {}

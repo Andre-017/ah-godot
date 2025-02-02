@@ -17,13 +17,13 @@ struct PlayerInput {
         reset();
     }
 
-    uint64_t physics_frame;
+    // uint64_t physics_frame;
 
     float forward;
     float left;
 
     void reset() {
-        physics_frame = 0;
+        // physics_frame = 0;
         forward = 0.0f;
         left = 0.0f;
     }
@@ -38,7 +38,7 @@ struct PlayerInput {
     Dictionary _serialize() const {
         Dictionary dict;
 
-        dict["physics_frame"] = physics_frame;
+        // dict["physics_frame"] = physics_frame;
 
         if (!Math::is_zero_approx(Math::abs(forward))) {
             dict["forward"] = forward;
@@ -52,58 +52,58 @@ struct PlayerInput {
     }
 
     void _deserialize(const Dictionary &dict) {
-        physics_frame = dict.get("physics_frame", 0);
+        // physics_frame = dict.get("physics_frame", 0);
         forward = dict.get("forward", 0.0f);
         left = dict.get("left", 0.0f);
     }
 };
 
-// struct PlayerState {
-//     PlayerState() {
-//         reset();
-//     }
+struct PlayerState {
+    PlayerState() {
+        reset();
+    }
     
-//     uint64_t physics_frame;
-//     PlayerInput input;
-//     PhysicsState physics_state;
+    uint64_t sequence;
+    PlayerInput input;
+    PhysicsState physics_state;
 
-//     void reset() {
-//         physics_frame = 0;
-//         input.reset();
-//         physics_state.reset();
-//     }
+    void reset() {
+        sequence = 0;
+        input.reset();
+        physics_state.reset();
+    }
 
-//     Dictionary _serialize() const {
-//         Dictionary dict;
+    Dictionary _serialize() const {
+        Dictionary dict;
 
-//         dict["physics_frame"] = physics_frame;
-//         dict["input"] = input._serialize();
-//         dict["physics_state"] = physics_state._serialize();
-//     }
+        dict["sequence"] = sequence;
+        dict["input"] = input._serialize();
+        dict["physics_state"] = physics_state._serialize();
 
-//     void _deserialize(const Dictionary &dict) {
-//         physics_frame = dict.get("physics_frame", 0);
-//         input._deserialize(dict.get("input", Dictionary()));
-//         physics_state._deserialize(dict.get("physics_state", Dictionary()));
-//     }
-// };
+        return dict;
+    }
+
+    void _deserialize(const Dictionary &dict) {
+        sequence = dict.get("sequence", 0);
+        input._deserialize(dict.get("input", Dictionary()));
+        physics_state._deserialize(dict.get("physics_state", Dictionary()));
+    }
+};
 
 class ReplicatedPhysicsPlayer3D : public ReplicatedRigidBody3D {
     GDCLASS(ReplicatedPhysicsPlayer3D, ReplicatedRigidBody3D);
 
 protected:
-    PhysicsNetworkManager *physics_manager = nullptr;
-
-    // uint64_t physics_tick = -1;
-
     int player_id; // Unique id for this player
 
     PlayerInput pending_input;
-    // CircularBuffer<PlayerInput> input_history;
-    CircularBuffer<PhysicsState> state_buffer = CircularBuffer<PhysicsState>(PHYSICS_STATE_BUFFER_SIZE);
+    // CircularBuffer<PlayerInput> input_history = CircularBuffer<PlayerInput>(PHYSICS_STATE_BUFFER_SIZE);
+    // CircularBuffer<PhysicsState> state_buffer = CircularBuffer<PhysicsState>(PHYSICS_STATE_BUFFER_SIZE);
 
-    int first_frame = -1;
-    int tick_offset = 0;
+    CircularBuffer<PlayerState> state_buffer = CircularBuffer<PlayerState>(PHYSICS_STATE_BUFFER_SIZE);
+
+    uint64_t input_sequence = 0;
+    uint64_t last_sequence = 0;
 
     void _ready() override;
     void _physics_process() override;
@@ -133,14 +133,14 @@ public:
 
 protected:
     // ----- RPC methods -----
-    void _client_send_input(const Dictionary &input);
+    void _client_send_input(const Dictionary &player_state);
     void _client_send_state(const Dictionary &in_client_state);
 
     // ----- End RPC methods -----
 
 public:
     // ----- Getters/Setters -----
-    void set_physics_manager(PhysicsNetworkManager* manager) { physics_manager = manager; }
+    // void set_physics_manager(PhysicsNetworkManager* manager) { physics_manager = manager; }
     // ----- End Getters/Setters -----
     
 protected:
