@@ -10,8 +10,6 @@ const int SERVER_ID = 1;
 // Number of physics frames to hold in buffer
 const int PHYSICS_STATE_BUFFER_SIZE = 200;
 
-class PhysicsNetworkManager;
-
 struct PlayerInput {
     PlayerInput() {
         reset();
@@ -107,7 +105,6 @@ protected:
 
     void _ready() override;
     void _physics_process() override;
-    void _consume_pending_input();
     void _apply_input(const PlayerInput &input);
     void _fill_physics_state(PhysicsState &state);
 
@@ -134,13 +131,13 @@ public:
 protected:
     // ----- RPC methods -----
     void _client_send_input(const Dictionary &player_state);
-    void _client_send_state(const Dictionary &in_client_state);
+    void _server_send_state(const Dictionary &in_server_state);
 
     // ----- End RPC methods -----
 
 public:
     // ----- Getters/Setters -----
-    // void set_physics_manager(PhysicsNetworkManager* manager) { physics_manager = manager; }
+
     // ----- End Getters/Setters -----
     
 protected:

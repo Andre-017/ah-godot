@@ -1,8 +1,6 @@
 #include "replicated_physics_player_3d.h"
 #include "scene/main/multiplayer_api.h"
 
-#include "physics_network_manager.h"
-
 void ReplicatedPhysicsPlayer3D::_ready() {
 	ReplicatedRigidBody3D::_ready();
 
@@ -14,45 +12,43 @@ void ReplicatedPhysicsPlayer3D::_physics_process() {
 
 	if (locally_controlled) {
 		_handle_inputs();
-		_consume_pending_input();
-	}
-
-	if (!multiplayer->is_server() && locally_controlled) {
-		PlayerState client_state;
-		_fill_physics_state(client_state.physics_state);
-		client_state.input = pending_input;
-		client_state.sequence = input_sequence;
-
-		state_buffer[state_buffer.get_next_index(input_sequence)] = client_state;
-
-		rpc_id(SERVER_ID, "_client_send_input_rpc", client_state._serialize());
-
-		input_sequence++;
-	}
-
-	pending_input.reset();
-}
-
-void ReplicatedPhysicsPlayer3D::_consume_pending_input() {
-	DEV_ASSERT(multiplayer);
-
-	if (pending_input.is_empty()) { return; }
-
-	// ToDo: Implement adjustment on client if needed
-
-	if (locally_controlled) {
-		// uint64_t physics_frame = Engine::get_singleton()->get_physics_frames();
-
-		// Apply input regardless if server or client, since this is using client-side prediction
 		_apply_input(pending_input);
 
-		// // If this isn't the server, then we need to send the input to the server to perform the same logic
-		// if (!multiplayer->is_server()) {
-		// 	rpc_id(SERVER_ID, "_client_send_input_rpc", pending_input._serialize());
-		// }
+		if (!multiplayer->is_server()) {
+			// ToDo: Check doing this logic only when there's input to apply
+
+			PlayerState client_state;
+			_fill_physics_state(client_state.physics_state);
+			client_state.input = pending_input;
+			client_state.sequence = input_sequence;
+
+			state_buffer[state_buffer.get_next_index(input_sequence)] = client_state;
+
+			// print_line("Client | Seq: ", client_state.sequence, " | state: ", client_state.physics_state._serialize());
+
+			rpc_id(SERVER_ID, "_client_send_input_rpc", client_state._serialize());
+
+			input_sequence++;
+		}
+
+		pending_input.reset(); // ToDo: Make sure having this here doesn't mess when more than 2 players (move it outside if statement if so)
 	}
 
-	// pending_input.reset();
+	if (!locally_controlled && multiplayer->is_server()) {
+		_apply_input(pending_input);
+
+		PlayerState server_state;
+		_fill_physics_state(server_state.physics_state);
+		server_state.sequence = last_sequence;
+
+		// print_line("Server | Seq: ", server_state.sequence, " | state: ", server_state.physics_state._serialize());
+
+		rpc_id(player_id, "_server_send_state_rpc", server_state._serialize());
+
+		// ToDo: Check to see pending input in here, I'd expect it to always be empty
+
+		// pending_input.reset();
+	}
 }
 
 void ReplicatedPhysicsPlayer3D::_apply_input(const PlayerInput &input) {
@@ -91,6 +87,7 @@ These methods are called from GDScript to perform the logic of the RPC. The rpc'
 This RPC is called from the client to the server to send input. The server will then apply the input to the player
 */
 // @rpc("any_peer", "unreliable_ordered")
+// ToDo: After testing, change this to use PlayerInput struct only, instead of PlayerState
 void ReplicatedPhysicsPlayer3D::_client_send_input(const Dictionary &player_state) {
 	DEV_ASSERT(multiplayer && multiplayer->is_server() && !locally_controlled);
 
@@ -98,46 +95,30 @@ void ReplicatedPhysicsPlayer3D::_client_send_input(const Dictionary &player_stat
     client_state._deserialize(player_state);
 
 	if (client_state.sequence > last_sequence) {
-		_apply_input(client_state.input);
+		// _apply_input(client_state.input);
+		pending_input = client_state.input;
 		last_sequence = client_state.sequence;
 	}
 }
 
 /*
-This RPC sends the physics state of the player from the client to the server to check for desync
+This RPC sends the physics state of the player from the server to the client to check for desync
 */
-// @rpc("any_peer", "unreliable_ordered")
-void ReplicatedPhysicsPlayer3D::_client_send_state(const Dictionary &in_client_state) {
-	DEV_ASSERT(multiplayer && !locally_controlled && multiplayer->is_server());
+// @rpc("authority", "unreliable_ordered")
+void ReplicatedPhysicsPlayer3D::_server_send_state(const Dictionary &in_server_state) {
+	DEV_ASSERT(multiplayer && locally_controlled && !multiplayer->is_server());
 
-	// ToDo: Get the tick offset between server and client, using something like a "first_frame" variable
+	PlayerState server_state;
+	server_state._deserialize(in_server_state);
 
-	// PhysicsState client_state;
-	// client_state._deserialize(in_client_state);
+	if (server_state.sequence <= last_sequence) { return; }
 
-	// if (first_frame == -1) {
-	// 	print_line("Server | client frame: ", client_state.physics_frame);
-	// 	print_line("Server current frame: ", Engine::get_singleton()->get_physics_frames());
-	// 	first_frame = client_state.physics_frame;
-	// 	tick_offset = Engine::get_singleton()->get_physics_frames() - client_state.physics_frame;
-	// 	print_line("Tick offset: ", tick_offset);
-	// }
+	last_sequence = server_state.sequence;
 
-	// PhysicsState server_state = state_buffer[state_buffer.get_next_index(client_state.physics_frame + tick_offset)];
+	PlayerState client_state = state_buffer[state_buffer.get_next_index(server_state.sequence)];
 
-	// print_line("Client state: ", client_state._serialize());
-	// print_line("Server state: ", server_state._serialize());
-
-	// print_line("Server | current frame: ", Engine::get_singleton()->get_physics_frames());
-	// print_line("Server | client state: ", client_state._serialize());
-
-	// PhysicsState client_state = state_buffer.get(server_state.physics_frame);
-	// PhysicsState client_state = state_buffer[state_buffer.get_next_index(server_state.physics_frame)];
-
-	// print_line("Client state: ", client_state._serialize());
-
-	// bool sync = !client_state.is_approx_equal(server_state);
-	// print_line("Sync: ", sync);
+	print_line("Server | Seq: ", server_state.sequence, " | state: ", server_state.physics_state._serialize());
+	print_line("Client | Seq: ", client_state.sequence, " | state: ", client_state.physics_state._serialize());
 }
 
 // ----- End RPC methods -----
@@ -158,11 +139,11 @@ void ReplicatedPhysicsPlayer3D::_bind_methods() {
 	we'll define them there and then call these methods to perform the logic
 	*/
 	ClassDB::bind_method(D_METHOD("_client_send_input", "player_state"), &ReplicatedPhysicsPlayer3D::_client_send_input);
-	ClassDB::bind_method(D_METHOD("_client_send_state", "in_client_state"), &ReplicatedPhysicsPlayer3D::_client_send_state);
+	ClassDB::bind_method(D_METHOD("_server_send_state", "in_server_state"), &ReplicatedPhysicsPlayer3D::_server_send_state);
 	// ----- End RPC methods -----
 
 	// ----- Getters/Setters -----
-	// ClassDB::bind_method(D_METHOD("set_physics_manager", "manager"), &ReplicatedPhysicsPlayer3D::set_physics_manager);
+
 	// ----- End Getters/Setters -----
 }
 
