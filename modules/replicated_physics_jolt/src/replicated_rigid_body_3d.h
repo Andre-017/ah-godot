@@ -3,6 +3,10 @@
 
 #include "scene/3d/physics/rigid_body_3d.h"
 
+// Position tolerance
+// const real_t POSITION_TOLERANCE = 0.005;
+const real_t POSITION_TOLERANCE = 0.0;
+
 struct PhysicsState {
     PhysicsState() {
         reset();
@@ -22,13 +26,8 @@ struct PhysicsState {
         angular_velocity = Vector3();
     }
 
-    bool is_approx_equal(const PhysicsState &p_other) const {
-        if (!position.is_equal_approx(p_other.position)) { return false; }
-        if (!linear_velocity.is_equal_approx(p_other.linear_velocity)) { return false; }
-        if (!angular_velocity.is_equal_approx(p_other.angular_velocity)) { return false; }
-        if (!rotation.is_equal_approx(p_other.rotation)) { return false; }
-
-        return true;
+    bool needs_sync(const PhysicsState &other_state) const {
+        return position.distance_squared_to(other_state.position) > POSITION_TOLERANCE;
     }
 
     Dictionary _serialize() const {

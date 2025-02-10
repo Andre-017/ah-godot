@@ -2,13 +2,20 @@
 #define REPLICATED_PHYSICS_PLAYER_3D_H
 
 #include "replicated_rigid_body_3d.h"
-#include "circular_buffer.h"
+#include "circular_buffer.h" // ToDo: Should this and the queue be included, or just use class forward declaration?
+#include "circular_queue.h"
 
 // Default id of the server in Godot multiplayer
-const int SERVER_ID = 1;
+const uint16_t SERVER_ID = 1;
 
 // Number of physics frames to hold in buffer
-const int PHYSICS_STATE_BUFFER_SIZE = 200;
+const uint16_t CIRCULAR_BUFFER_SIZE = 200;
+
+/*
+ToDo:   This should be changed to a dynamic variable that changes based on the size of the input queue.If the input queue is over a certain number, set this to 0
+        The smaller the queue, the higher this number 
+*/
+static constexpr uint16_t INPUT_BUFFER_SIZE = 0; // Number of frames to hold until server applies client input.
 
 struct PlayerInput {
     PlayerInput() {
@@ -95,13 +102,17 @@ protected:
     int player_id; // Unique id for this player
 
     PlayerInput pending_input;
-    // CircularBuffer<PlayerInput> input_history = CircularBuffer<PlayerInput>(PHYSICS_STATE_BUFFER_SIZE);
-    // CircularBuffer<PhysicsState> state_buffer = CircularBuffer<PhysicsState>(PHYSICS_STATE_BUFFER_SIZE);
 
-    CircularBuffer<PlayerState> state_buffer = CircularBuffer<PlayerState>(PHYSICS_STATE_BUFFER_SIZE);
+    CircularBuffer<PlayerState> state_buffer = CircularBuffer<PlayerState>(CIRCULAR_BUFFER_SIZE);
+
+    // Queue used by the server to process inputs from the client
+    CircularQueue<PlayerState> server_input_queue = CircularQueue<PlayerState>(CIRCULAR_BUFFER_SIZE);
 
     uint64_t input_sequence = 0;
     uint64_t last_sequence = 0;
+
+    bool sync_needed = false;
+    PlayerState sync_state;
 
     void _ready() override;
     void _physics_process() override;
@@ -109,6 +120,8 @@ protected:
     void _fill_physics_state(PhysicsState &state);
 
     bool locally_controlled = false;
+
+    void reconcile_state(const PlayerState &server_state);
 
 public:
     // Set locally_controlled from GDScript _ready() method. Doing it here in C++ doesn't guarantee it's set before _ready() is called in GDScript
@@ -130,7 +143,7 @@ public:
 
 protected:
     // ----- RPC methods -----
-    void _client_send_input(const Dictionary &player_state);
+    void _client_send_input(const Dictionary &in_client_state);
     void _server_send_state(const Dictionary &in_server_state);
 
     // ----- End RPC methods -----

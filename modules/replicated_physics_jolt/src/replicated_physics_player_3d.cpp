@@ -11,10 +11,17 @@ void ReplicatedPhysicsPlayer3D::_physics_process() {
 	DEV_ASSERT(multiplayer);
 
 	if (locally_controlled) {
-		_handle_inputs();
-		_apply_input(pending_input);
+		// _handle_inputs();
+		// _apply_input(pending_input);
 
 		if (!multiplayer->is_server()) {
+			if (sync_needed) {
+				// reconcile_state(sync_state);
+			}
+
+			_handle_inputs();
+			_apply_input(pending_input);
+
 			// ToDo: Check doing this logic only when there's input to apply
 
 			PlayerState client_state;
@@ -24,8 +31,7 @@ void ReplicatedPhysicsPlayer3D::_physics_process() {
 
 			state_buffer[state_buffer.get_next_index(input_sequence)] = client_state;
 
-			// print_line("Client | Seq: ", client_state.sequence, " | state: ", client_state.physics_state._serialize());
-
+			// print_line("Client sending input for sequence: ", input_sequence);
 			rpc_id(SERVER_ID, "_client_send_input_rpc", client_state._serialize());
 
 			input_sequence++;
@@ -35,20 +41,37 @@ void ReplicatedPhysicsPlayer3D::_physics_process() {
 	}
 
 	if (!locally_controlled && multiplayer->is_server()) {
-		_apply_input(pending_input);
+		if (server_input_queue.size() > INPUT_BUFFER_SIZE) {
+			PlayerState client_state;
+			server_input_queue.pop(client_state);
 
-		PlayerState server_state;
-		_fill_physics_state(server_state.physics_state);
-		server_state.sequence = last_sequence;
+			// print_line("Server applying input for state: ", client_state._serialize());
+			_apply_input(client_state.input);
 
-		// print_line("Server | Seq: ", server_state.sequence, " | state: ", server_state.physics_state._serialize());
+			print_line("Input buffer size after apply: ", server_input_queue.size());
 
-		rpc_id(player_id, "_server_send_state_rpc", server_state._serialize());
+			PlayerState server_state;
+			_fill_physics_state(server_state.physics_state);
+			server_state.sequence = client_state.sequence;
 
-		// ToDo: Check to see pending input in here, I'd expect it to always be empty
-
-		// pending_input.reset();
+			// print_line("Server sending state for sequence: ", server_state.sequence);
+			rpc_id(player_id, "_server_send_state_rpc", server_state._serialize());
+		}
 	}
+
+	// if (!locally_controlled && multiplayer->is_server()) {
+	// 	print_line("Server applying input to client for sequence: ", last_sequence);
+	// 	// _apply_input(pending_input);
+
+	// 	PlayerState server_state;
+	// 	_fill_physics_state(server_state.physics_state);
+	// 	server_state.sequence = last_sequence;
+
+	// 	print_line("Server sending state for sequence: ", last_sequence);
+	// 	rpc_id(player_id, "_server_send_state_rpc", server_state._serialize());
+
+	// 	// We won't reset the pending input here. If an input is missed from client -> server, we'll keep applying the last input
+	// }
 }
 
 void ReplicatedPhysicsPlayer3D::_apply_input(const PlayerInput &input) {
@@ -65,6 +88,34 @@ void ReplicatedPhysicsPlayer3D::_fill_physics_state(PhysicsState &state) {
 	state.rotation = get_global_transform().basis.get_quaternion();
 	state.linear_velocity = get_linear_velocity();
 	state.angular_velocity = get_angular_velocity();
+}
+
+void ReplicatedPhysicsPlayer3D::reconcile_state(const PlayerState &server_state) {
+	DEV_ASSERT(multiplayer && locally_controlled && !multiplayer->is_server()); // Reconciliation only occurs on the client
+
+	PlayerState client_state = state_buffer[state_buffer.get_next_index(server_state.sequence)];
+
+	print_line("Reconciling state | server seq: ", server_state.sequence, " | client seq: ", client_state.sequence, " | input seq: ", input_sequence);
+	print_line("Reconciling state | server: ", server_state.physics_state._serialize(), " | client: ", client_state.physics_state._serialize());
+
+	set_global_position(server_state.physics_state.position);
+	set_quaternion(server_state.physics_state.rotation);
+	set_linear_velocity(server_state.physics_state.linear_velocity);
+	set_angular_velocity(server_state.physics_state.angular_velocity);
+
+	uint64_t tick = server_state.sequence;
+
+	// while (tick < input_sequence) {
+	// 	PlayerState state = state_buffer[state_buffer.get_next_index(tick)];
+
+	// 	print_line("Applying state: ", state._serialize());
+
+	// 	_apply_input(state.input);
+
+	// 	tick++;
+	// }
+
+	sync_needed = false;
 }
 
 // ----- Input methods exposed to GDScript -----
@@ -88,15 +139,16 @@ This RPC is called from the client to the server to send input. The server will 
 */
 // @rpc("any_peer", "unreliable_ordered")
 // ToDo: After testing, change this to use PlayerInput struct only, instead of PlayerState
-void ReplicatedPhysicsPlayer3D::_client_send_input(const Dictionary &player_state) {
+void ReplicatedPhysicsPlayer3D::_client_send_input(const Dictionary &in_client_state) {
 	DEV_ASSERT(multiplayer && multiplayer->is_server() && !locally_controlled);
 
     PlayerState client_state;
-    client_state._deserialize(player_state);
+    client_state._deserialize(in_client_state);
+
+	print_line("Server received client input for seq: ", client_state.sequence);
 
 	if (client_state.sequence > last_sequence) {
-		// _apply_input(client_state.input);
-		pending_input = client_state.input;
+		server_input_queue.push(client_state);
 		last_sequence = client_state.sequence;
 	}
 }
@@ -111,14 +163,22 @@ void ReplicatedPhysicsPlayer3D::_server_send_state(const Dictionary &in_server_s
 	PlayerState server_state;
 	server_state._deserialize(in_server_state);
 
-	if (server_state.sequence <= last_sequence) { return; }
+	// print_line("Server seq: ", server_state.sequence, " | last seq: ", last_sequence);
 
-	last_sequence = server_state.sequence;
+	if (server_state.sequence <= last_sequence) { return; }
 
 	PlayerState client_state = state_buffer[state_buffer.get_next_index(server_state.sequence)];
 
 	print_line("Server | Seq: ", server_state.sequence, " | state: ", server_state.physics_state._serialize());
 	print_line("Client | Seq: ", client_state.sequence, " | state: ", client_state.physics_state._serialize());
+
+	if (client_state.physics_state.needs_sync(server_state.physics_state)) {
+		print_line("Sync needed for sequence ", server_state.sequence);
+		sync_needed = true;
+		sync_state = server_state;
+	}
+
+	last_sequence = server_state.sequence;
 }
 
 // ----- End RPC methods -----
@@ -138,7 +198,7 @@ void ReplicatedPhysicsPlayer3D::_bind_methods() {
 	The below method bindings are for RPC methods. Since these rpc's need to be defined in GDScript,
 	we'll define them there and then call these methods to perform the logic
 	*/
-	ClassDB::bind_method(D_METHOD("_client_send_input", "player_state"), &ReplicatedPhysicsPlayer3D::_client_send_input);
+	ClassDB::bind_method(D_METHOD("_client_send_input", "in_client_state"), &ReplicatedPhysicsPlayer3D::_client_send_input);
 	ClassDB::bind_method(D_METHOD("_server_send_state", "in_server_state"), &ReplicatedPhysicsPlayer3D::_server_send_state);
 	// ----- End RPC methods -----
 

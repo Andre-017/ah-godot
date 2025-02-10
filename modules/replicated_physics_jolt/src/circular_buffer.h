@@ -16,7 +16,6 @@ public:
      */
     explicit CircularBuffer(uint32_t capacity) {
         ERR_FAIL_COND_MSG(capacity == 0, "Capacity must be greater than 0.");
-        // capacity = Math::ceil_power_of_two(capacity); // Round up to the next power of 2
         capacity = next_power_of_2(capacity);
         elements.resize(capacity);
         index_mask = capacity - 1;
